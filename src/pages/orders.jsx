@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+
 import {
   MapContainer,
   TileLayer,
@@ -82,6 +83,173 @@ function FlyTo({ position }) {
   return null;
 }
 
+
+function OrderDetails({ order, onClose, onRoute, onGoogleMaps, onStatusChange, updating }) {
+  if (!order) return null;
+
+  const subtotal = Number(order.subtotal) || 0;
+  const deliveryPrice = Number(order.deliveryPrice) || 0;
+  const serviceFee = Number(order.serviceFee) || 0;
+  const total = Number(order.totalAmount) || 0;
+
+  const statuses = {
+    pending: { label: "Ожидает", color: "warning" },
+    in_transit: { label: "В пути", color: "primary" },
+    delivered: { label: "Доставлен", color: "success" }
+  };
+
+  const status = statuses[order.status] || {
+    label: order.status,
+    color: "secondary"
+  };
+
+  return (
+    <div className="order-details shadow-lg">
+      <div className="order-details-header">
+        <div>
+          <span className="small text-white-50">ДЕТАЛИ ЗАКАЗА</span>
+          <h4 className="text-white fw-bold mb-0">
+            Заказ #{order.id}
+          </h4>
+        </div>
+
+        <button
+          className="btn btn-light btn-sm rounded-circle"
+          onClick={onClose}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="p-3">
+
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <span className="text-muted">Статус заказа</span>
+          <span className={`badge bg-${status.color} rounded-pill px-3 py-2`}>
+            {status.label}
+          </span>
+        </div>
+
+        <hr />
+
+        <h6 className="fw-bold mb-3">👤 Информация о клиенте</h6>
+
+        <div className="detail-info">
+          <span>Имя клиента</span>
+          <strong>{order.customerName || "Не указано"}</strong>
+        </div>
+
+        <div className="detail-info">
+          <span>Телефон</span>
+          <strong>{order.customerPhone || "Не указан"}</strong>
+        </div>
+
+        <div className="detail-info">
+          <span>Адрес доставки</span>
+          <strong>{order.address || "Не указан"}</strong>
+        </div>
+
+        <hr />
+
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h6 className="fw-bold mb-0">📦 Товары заказа</h6>
+          <span className="badge bg-primary">
+            {order.items?.length || 0} товаров
+          </span>
+        </div>
+
+        {order.items?.length > 0 ? (
+          order.items.map((item, index) => (
+            <div className="detail-product" key={item.id || index}>
+              <div>
+                <strong>
+                  {item.title || item.name || item.description}
+                </strong>
+                <div className="small text-muted">
+                  {item.count || 1} шт. × {Number(item.price || 0).toLocaleString("ru-RU")} сом
+                </div>
+              </div>
+
+              <strong className="text-success">
+                {(Number(item.price || 0) * Number(item.count || 1)).toLocaleString("ru-RU")} сом
+              </strong>
+            </div>
+          ))
+        ) : (
+          <p className="text-muted small">Товары не указаны</p>
+        )}
+
+        <hr />
+
+        <h6 className="fw-bold mb-3">💳 Детали оплаты</h6>
+
+        <div className="detail-info">
+          <span>Стоимость товаров</span>
+          <strong>{subtotal.toLocaleString("ru-RU")} сом</strong>
+        </div>
+
+        <div className="detail-info">
+          <span>Доставка</span>
+          <strong>{deliveryPrice.toLocaleString("ru-RU")} сом</strong>
+        </div>
+
+        <div className="detail-info">
+          <span>Комиссия</span>
+          <strong>{serviceFee.toLocaleString("ru-RU")} сом</strong>
+        </div>
+
+        <div className="total-box">
+          <span>Итого к оплате</span>
+          <h4 className="text-success fw-bold mb-0">
+            {total.toLocaleString("ru-RU")} сом
+          </h4>
+        </div>
+
+        <hr />
+
+        <div className="d-grid gap-2">
+
+          {order.status === "pending" && (
+            <button
+              className="btn btn-primary"
+              disabled={updating}
+              onClick={() => onStatusChange(order, "in_transit")}
+            >
+              🚴 Начать доставку
+            </button>
+          )}
+
+          {order.status !== "delivered" && (
+            <button
+              className="btn btn-success"
+              disabled={updating}
+              onClick={() => onStatusChange(order, "delivered")}
+            >
+              ✓ Заказ доставлен
+            </button>
+          )}
+
+          <button
+            className="btn btn-outline-primary"
+            onClick={() => onRoute(order)}
+          >
+            🗺 Построить маршрут
+          </button>
+
+          <button
+            className="btn btn-outline-dark"
+            onClick={() => onGoogleMaps(order)}
+          >
+            Открыть Google Maps
+          </button>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function New() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -91,8 +259,6 @@ function New() {
   const [routeLoading, setRouteLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [updatingId, setUpdatingId] = useState(null);
-
- 
 
   // Поиск адреса
   const [searchQuery, setSearchQuery] = useState("");
@@ -234,8 +400,6 @@ function New() {
     );
   }
 
- 
-
   return (
     <div className="container-fluid mt-3">
       <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
@@ -353,46 +517,52 @@ function New() {
                           </p>
                           <p className="mb-1 small">
                             <strong>Адрес:</strong> {order.address}
-                            
-{/* Товары заказа */}
-<div className="card border-0 bg-light rounded-4 mt-3">
-  <div className="card-body p-3">
+                            {/* Товары заказа */}
+                            <div className="card border-0 bg-light rounded-4 mt-3">
+                              <div className="card-body p-3">
+                                <h6 className="fw-bold mb-3">
+                                  <i className="fa-solid fa-box-open text-primary me-2"></i>
+                                  Заказанные товары
+                                </h6>
 
-    <h6 className="fw-bold mb-3">
-      <i className="fa-solid fa-box-open text-primary me-2"></i>
-      Заказанные товары
-    </h6>
+                                {order.items && order.items.length > 0 ? (
+                                  order.items.map((item, index) => (
+                                    <div
+                                      key={item.id || index}
+                                      className="d-flex justify-content-between align-items-center border-bottom py-2"
+                                    >
+                                      <div>
+                                        <strong className="d-block">
+                                          {item.title ||
+                                            item.name ||
+                                            item.description}
+                                        </strong>
 
-    {order.items && order.items.length > 0 ? (
-      order.items.map((item, index) => (
-        <div
-          key={item.id || index}
-          className="d-flex justify-content-between align-items-center border-bottom py-2"
-        >
-          <div>
-            <strong className="d-block">
-              {item.title || item.name || item.description}
-            </strong>
+                                        <small className="text-secondary">
+                                          {item.count || 1} шт. ×{" "}
+                                          {Number(
+                                            item.price || 0
+                                          ).toLocaleString("ru-RU")}{" "}
+                                          сом
+                                        </small>
+                                      </div>
 
-            <small className="text-secondary">
-              {item.count || 1} шт. × {Number(item.price || 0).toLocaleString("ru-RU")} сом
-            </small>
-          </div>
-
-          <strong className="text-success">
-            {(Number(item.price || 0) * Number(item.count || 1)).toLocaleString("ru-RU")} сом
-          </strong>
-        </div>
-      ))
-    ) : (
-      <p className="text-muted small mb-0">
-        Товары не указаны
-      </p>
-    )}
-
-  </div>
-</div>
-
+                                      <strong className="text-success">
+                                        {(
+                                          Number(item.price || 0) *
+                                          Number(item.count || 1)
+                                        ).toLocaleString("ru-RU")}{" "}
+                                        сом
+                                      </strong>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-muted small mb-0">
+                                    Товары не указаны
+                                  </p>
+                                )}
+                              </div>
+                            </div>
                           </p>
                           <div
                             className="border rounded p-2 mt-1 mb-1"
@@ -401,61 +571,60 @@ function New() {
                               background: "#f8f9fa",
                             }}
                           >
-                         
-{/* Финансовая информация */}
-<div className="card border-0 bg-light rounded-4 mt-3">
-  <div className="card-body p-3">
+                            {/* Финансовая информация */}
+                            <div className="card border-0 bg-light rounded-4 mt-3">
+                              <div className="card-body p-3">
+                                <h6 className="fw-bold mb-3">
+                                  <i className="fa-solid fa-receipt text-primary me-2"></i>
+                                  Детали оплаты
+                                </h6>
 
-    <h6 className="fw-bold mb-3">
-      <i className="fa-solid fa-receipt text-primary me-2"></i>
-      Детали оплаты
-    </h6>
+                                {/* Товары */}
+                                <div className="d-flex justify-content-between mb-2">
+                                  <span className="text-secondary">
+                                    <i className="fa-solid fa-basket-shopping me-2"></i>
+                                    Стоимость товаров
+                                  </span>
+                                  <strong>
+                                    {subtotal.toLocaleString("ru-RU")} сом
+                                  </strong>
+                                </div>
 
-    {/* Товары */}
-    <div className="d-flex justify-content-between mb-2">
-      <span className="text-secondary">
-        <i className="fa-solid fa-basket-shopping me-2"></i>
-        Стоимость товаров
-      </span>
-      <strong>
-        {subtotal.toLocaleString("ru-RU")} сом
-      </strong>
-    </div>
+                                {/* Доставка */}
+                                <div className="d-flex justify-content-between mb-2">
+                                  <span className="text-secondary">
+                                    <i className="fa-solid fa-motorcycle me-2"></i>
+                                    Доставка ({order.weight} кг)
+                                  </span>
+                                  <strong className="text-primary">
+                                    {deliveryPrice.toLocaleString("ru-RU")} сом
+                                  </strong>
+                                </div>
 
-    {/* Доставка */}
-    <div className="d-flex justify-content-between mb-2">
-      <span className="text-secondary">
-        <i className="fa-solid fa-motorcycle me-2"></i>
-        Доставка ({order.weight} кг)
-      </span>
-      <strong className="text-primary">
-        {deliveryPrice.toLocaleString("ru-RU")} сом
-      </strong>
-    </div>
+                                {/* Комиссия */}
+                                <div className="d-flex justify-content-between mb-2">
+                                  <span className="text-secondary">
+                                    <i className="fa-solid fa-percent me-2"></i>
+                                    Комиссия ({serviceFeePercent}%)
+                                  </span>
+                                  <strong className="text-danger">
+                                    {serviceFee.toLocaleString("ru-RU")} сом
+                                  </strong>
+                                </div>
 
-    {/* Комиссия */}
-    <div className="d-flex justify-content-between mb-2">
-      <span className="text-secondary">
-        <i className="fa-solid fa-percent me-2"></i>
-        Комиссия ({serviceFeePercent}%)
-      </span>
-      <strong className="text-danger">
-        {serviceFee.toLocaleString("ru-RU")} сом
-      </strong>
-    </div>
+                                <hr />
 
-    <hr />
-
-    {/* Итого */}
-    <div className="d-flex justify-content-between align-items-center">
-      <strong className="fs-6 ">Итого к оплате:</strong>
-      <strong className="fs-5 text-success ps-2">
-        {totalAmount.toLocaleString("ru-RU")} сом
-      </strong>
-    </div>
-
-  </div>
-</div>
+                                {/* Итого */}
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <strong className="fs-6 ">
+                                    Итого к оплате:
+                                  </strong>
+                                  <strong className="fs-5 text-success ps-2">
+                                    {totalAmount.toLocaleString("ru-RU")} сом
+                                  </strong>
+                                </div>
+                              </div>
+                            </div>
 
                             <div className="d-flex justify-content-between">
                               <span className="text-muted">🚴 Доставка</span>
@@ -633,39 +802,58 @@ function New() {
                 </Marker>
               )}
 
-              {ordersWithCoords.map((order) => {
-                const isSelected = selectedOrder?.id === order.id;
-                const statusInfo = STATUS_COLORS[order.status] || {
-                  label: order.status,
-                };
-                return (
-                  <Marker
-                    key={order.id}
-                    position={[parseFloat(order.lat), parseFloat(order.long)]}
-                    icon={isSelected ? selectedOrderIcon : orderIcon}
-                    eventHandlers={{ click: () => buildRoute(order) }}
-                  >
-                    <Popup>
-                      <div style={{ minWidth: 180 }}>
-                        <strong>Заказ #{order.id}</strong>
-                        <br />
-                        {order.customerName}
-                        <br />
-                        {order.address}
-                        <br />
-                        {order.totalAmount} сом
-                        <br />
-                        <button
-                          className="btn btn-sm btn-primary mt-2 w-100"
-                          onClick={() => buildRoute(order)}
-                        >
-                          Проложить маршрут
-                        </button>
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })}
+           
+{ordersWithCoords.map((order) => {
+  const isSelected = selectedOrder?.id === order.id;
+
+  return (
+    <Marker
+      key={order.id}
+      position={[
+        parseFloat(order.lat),
+        parseFloat(order.long)
+      ]}
+      icon={isSelected ? selectedOrderIcon : orderIcon}
+      eventHandlers={{
+        click: () => {
+          setSelectedOrder(order);
+          buildRoute(order);
+        }
+      }}
+    >
+      <Popup>
+        <div style={{ minWidth: 200 }}>
+          <h6 className="fw-bold">
+            📦 Заказ #{order.id}
+          </h6>
+
+          <p className="mb-1">
+            <strong>Клиент:</strong> {order.customerName}
+          </p>
+
+          <p className="mb-1">
+            <strong>Адрес:</strong> {order.address}
+          </p>
+
+          <p className="mb-2">
+            <strong>Сумма:</strong> {order.totalAmount} сом
+          </p>
+
+          <button
+            className="btn btn-primary btn-sm w-100"
+            onClick={() => {
+              setSelectedOrder(order);
+              buildRoute(order);
+            }}
+          >
+            Подробнее о заказе
+          </button>
+        </div>
+      </Popup>
+    </Marker>
+  );
+})}
+
 
               {routePoints.length > 0 && (
                 <Polyline
@@ -678,19 +866,21 @@ function New() {
             </MapContainer>
           </div>
 
-          {selectedOrder && !routeLoading && routePoints.length > 0 && (
-            <div className="mt-2 alert alert-primary d-flex align-items-center justify-content-between py-2">
-              <span>
-                Маршрут до Заказа #{selectedOrder.id} ({selectedOrder.address})
-              </span>
-              <button
-                className="btn btn-sm btn-outline-primary"
-                onClick={() => openGoogleMaps(selectedOrder)}
-              >
-                Открыть в Google Maps
-              </button>
-            </div>
-          )}
+        
+{selectedOrder && (
+  <OrderDetails
+    order={selectedOrder}
+    onClose={() => {
+      setSelectedOrder(null);
+      setRoutePoints([]);
+    }}
+    onRoute={buildRoute}
+    onGoogleMaps={openGoogleMaps}
+    onStatusChange={changeStatus}
+    updating={updatingId === selectedOrder.id}
+  />
+)}
+
         </div>
       </div>
     </div>
